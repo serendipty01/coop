@@ -1,6 +1,19 @@
 import { AuthenticationError } from 'apollo-server-express';
-import { gqlErrorResult, gqlSuccessResult } from '../utils/gqlResult.js';
+
 import { ErrorType, CoopError } from '../../utils/errors.js';
+import { logErrorJson } from '../../utils/logging.js';
+import { gqlErrorResult, gqlSuccessResult } from '../utils/gqlResult.js';
+
+/** Context shape required by rotateWebhookSigningKey (avoids importing resolvers). */
+type RotateWebhookSigningKeyContext = {
+  getUser: () => {
+    orgId: string;
+    getPermissions: () => readonly string[];
+  } | null | undefined;
+  dataSources: {
+    orgAPI: { rotateWebhookSigningKey: (orgId: string) => Promise<string> };
+  };
+};
 
 const typeDefs = /* GraphQL */ `
   type ApiKey {
@@ -34,12 +47,30 @@ const typeDefs = /* GraphQL */ `
     description: String
   }
 
+  type RotateWebhookSigningKeySuccessResponse {
+    publicSigningKey: String!
+  }
+
+  type RotateWebhookSigningKeyError implements Error {
+    title: String!
+    status: Int!
+    type: [String!]!
+    pointer: String
+    detail: String
+    requestId: String
+  }
+
+  union RotateWebhookSigningKeyResponse =
+      RotateWebhookSigningKeySuccessResponse
+    | RotateWebhookSigningKeyError
+
   type Query {
     apiKey: String!
   }
 
   type Mutation {
     rotateApiKey(input: RotateApiKeyInput!): RotateApiKeyResponse!
+    rotateWebhookSigningKey: RotateWebhookSigningKeyResponse!
   }
 `;
 
@@ -64,6 +95,11 @@ const Mutation: any = {
     const user = context.getUser();
     if (!user || !user.orgId) {
       throw new AuthenticationError('User must be authenticated');
+    }
+    if (!user.getPermissions().includes('MANAGE_ORG')) {
+      throw new AuthenticationError(
+        'User does not have permission to rotate the API key',
+      );
     }
 
     try {
@@ -90,15 +126,59 @@ const Mutation: any = {
         'RotateApiKeySuccessResponse'
       );
     } catch (error) {
+      // Resolvers do not receive a request-scoped logger; use logErrorJson for structured server-side logging.
+      // eslint-disable-next-line no-restricted-syntax -- see comment above
+      logErrorJson({ message: 'Failed to rotate API key', error });
       return gqlErrorResult(
         new CoopError({
           status: 500,
           type: [ErrorType.InternalServerError],
           title: 'Failed to rotate API key',
-          detail: error instanceof Error ? error.message : 'An error occurred while rotating the API key',
+          detail: 'An error occurred while rotating the API key',
           name: 'InternalServerError',
           shouldErrorSpan: true,
-        })
+        }),
+      );
+    }
+  },
+  async rotateWebhookSigningKey(
+    _: unknown,
+    __: Record<string, never>,
+    context: RotateWebhookSigningKeyContext,
+  ) {
+    const user = context.getUser();
+    if (!user || !user.orgId) {
+      throw new AuthenticationError('User must be authenticated');
+    }
+    if (!user.getPermissions().includes('MANAGE_ORG')) {
+      throw new AuthenticationError(
+        'User does not have permission to rotate the webhook signing key',
+      );
+    }
+
+    try {
+      const publicSigningKey =
+        await context.dataSources.orgAPI.rotateWebhookSigningKey(user.orgId);
+      return gqlSuccessResult(
+        { publicSigningKey },
+        'RotateWebhookSigningKeySuccessResponse',
+      );
+    } catch (error) {
+      // Resolvers do not receive a request-scoped logger; use logErrorJson for structured server-side logging.
+      // eslint-disable-next-line no-restricted-syntax -- see comment above
+      logErrorJson({
+        message: 'Failed to rotate webhook signing key',
+        error,
+      });
+      return gqlErrorResult(
+        new CoopError({
+          status: 500,
+          type: [ErrorType.InternalServerError],
+          title: 'Failed to rotate webhook signing key',
+          detail: 'An error occurred while rotating the webhook signing key',
+          name: 'InternalServerError',
+          shouldErrorSpan: true,
+        }),
       );
     }
   },

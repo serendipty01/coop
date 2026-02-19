@@ -2259,6 +2259,7 @@ export type GQLMutation = {
   readonly requestDemo?: Maybe<Scalars['Boolean']>;
   readonly resetPassword: Scalars['Boolean'];
   readonly rotateApiKey: GQLRotateApiKeyResponse;
+  readonly rotateWebhookSigningKey: GQLRotateWebhookSigningKeyResponse;
   readonly runRetroaction?: Maybe<GQLRunRetroactionResponse>;
   readonly sendPasswordReset: Scalars['Boolean'];
   readonly setAllUserStrikeThresholds: GQLSetAllUserStrikeThresholdsSuccessResponse;
@@ -3608,6 +3609,25 @@ export type GQLRotateApiKeySuccessResponse = {
   readonly record: GQLApiKey;
 };
 
+export type GQLRotateWebhookSigningKeyError = GQLError & {
+  readonly __typename: 'RotateWebhookSigningKeyError';
+  readonly detail?: Maybe<Scalars['String']>;
+  readonly pointer?: Maybe<Scalars['String']>;
+  readonly requestId?: Maybe<Scalars['String']>;
+  readonly status: Scalars['Int'];
+  readonly title: Scalars['String'];
+  readonly type: ReadonlyArray<Scalars['String']>;
+};
+
+export type GQLRotateWebhookSigningKeyResponse =
+  | GQLRotateWebhookSigningKeyError
+  | GQLRotateWebhookSigningKeySuccessResponse;
+
+export type GQLRotateWebhookSigningKeySuccessResponse = {
+  readonly __typename: 'RotateWebhookSigningKeySuccessResponse';
+  readonly publicSigningKey: Scalars['String'];
+};
+
 export type GQLRoutingRule = {
   readonly __typename: 'RoutingRule';
   readonly conditionSet: GQLConditionSet;
@@ -4765,6 +4785,28 @@ export type GQLRotateApiKeyMutation = {
           readonly lastUsedAt?: string | null;
           readonly createdBy?: string | null;
         };
+      };
+};
+
+export type GQLRotateWebhookSigningKeyMutationVariables = Exact<{
+  [key: string]: never;
+}>;
+
+export type GQLRotateWebhookSigningKeyMutation = {
+  readonly __typename: 'Mutation';
+  readonly rotateWebhookSigningKey:
+    | {
+        readonly __typename: 'RotateWebhookSigningKeyError';
+        readonly title: string;
+        readonly status: number;
+        readonly type: ReadonlyArray<string>;
+        readonly detail?: string | null;
+        readonly pointer?: string | null;
+        readonly requestId?: string | null;
+      }
+    | {
+        readonly __typename: 'RotateWebhookSigningKeySuccessResponse';
+        readonly publicSigningKey: string;
       };
 };
 
@@ -24855,6 +24897,66 @@ export type GQLRotateApiKeyMutationOptions = Apollo.BaseMutationOptions<
   GQLRotateApiKeyMutation,
   GQLRotateApiKeyMutationVariables
 >;
+export const GQLRotateWebhookSigningKeyDocument = gql`
+  mutation RotateWebhookSigningKey {
+    rotateWebhookSigningKey {
+      ... on RotateWebhookSigningKeySuccessResponse {
+        publicSigningKey
+      }
+      ... on RotateWebhookSigningKeyError {
+        title
+        status
+        type
+        detail
+        pointer
+        requestId
+      }
+    }
+  }
+`;
+export type GQLRotateWebhookSigningKeyMutationFn = Apollo.MutationFunction<
+  GQLRotateWebhookSigningKeyMutation,
+  GQLRotateWebhookSigningKeyMutationVariables
+>;
+
+/**
+ * __useGQLRotateWebhookSigningKeyMutation__
+ *
+ * To run a mutation, you first call `useGQLRotateWebhookSigningKeyMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useGQLRotateWebhookSigningKeyMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [gqlRotateWebhookSigningKeyMutation, { data, loading, error }] = useGQLRotateWebhookSigningKeyMutation({
+ *   variables: {
+ *   },
+ * });
+ */
+export function useGQLRotateWebhookSigningKeyMutation(
+  baseOptions?: Apollo.MutationHookOptions<
+    GQLRotateWebhookSigningKeyMutation,
+    GQLRotateWebhookSigningKeyMutationVariables
+  >,
+) {
+  const options = { ...defaultOptions, ...baseOptions };
+  return Apollo.useMutation<
+    GQLRotateWebhookSigningKeyMutation,
+    GQLRotateWebhookSigningKeyMutationVariables
+  >(GQLRotateWebhookSigningKeyDocument, options);
+}
+export type GQLRotateWebhookSigningKeyMutationHookResult = ReturnType<
+  typeof useGQLRotateWebhookSigningKeyMutation
+>;
+export type GQLRotateWebhookSigningKeyMutationResult =
+  Apollo.MutationResult<GQLRotateWebhookSigningKeyMutation>;
+export type GQLRotateWebhookSigningKeyMutationOptions =
+  Apollo.BaseMutationOptions<
+    GQLRotateWebhookSigningKeyMutation,
+    GQLRotateWebhookSigningKeyMutationVariables
+  >;
 export const GQLHashBanksDocument = gql`
   query HashBanks {
     hashBanks {
@@ -37174,6 +37276,7 @@ export const namedOperations = {
   },
   Mutation: {
     RotateApiKey: 'RotateApiKey',
+    RotateWebhookSigningKey: 'RotateWebhookSigningKey',
     CreateHashBank: 'CreateHashBank',
     UpdateHashBank: 'UpdateHashBank',
     DeleteHashBank: 'DeleteHashBank',
