@@ -282,13 +282,15 @@ export type {
   CoopIntegrationConfigEntry,
   CoopIntegrationPlugin,
   CoopIntegrationsConfig,
-  IntegrationCredentialField,
+  IntegrationConfigField,
   IntegrationId,
   IntegrationManifest,
   ModelCard,
   ModelCardField,
   ModelCardSection,
   ModelCardSubsection,
+  PluginSignalContext,
+  PluginSignalDescriptor,
   StoredIntegrationConfigPayload,
 } from './integration.js';
 export {

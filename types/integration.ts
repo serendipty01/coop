@@ -94,11 +94,11 @@ export function assertModelCardHasRequiredSections(card: ModelCard): void {
 }
 
 /**
- * Describes a single credential field for integrations that require
- * API keys or other secrets. Used to generate or validate credential forms.
+ * Describes a single configuration field for integrations that require
+ * user-supplied config (e.g. API keys or other settings). Used to generate or validate config forms.
  */
-export type IntegrationCredentialField = Readonly<{
-  /** Form field key (e.g. "apiKey", "labelerVersions"). */
+export type IntegrationConfigField = Readonly<{
+  /** Form field key (e.g. "apiKey", "truePercentage"). */
   key: string;
   /** Human-readable label for the field. */
   label: string;
@@ -119,7 +119,7 @@ export type IntegrationCredentialField = Readonly<{
 export type IntegrationManifest = Readonly<{
   /** Unique integration id. Must be UPPER_SNAKE_CASE to align with GraphQL enums when used in COOP. */
   id: IntegrationId;
-  /** Human-readable display name (e.g. "Google Content Safety API"). */
+  /** Human-readable display name shown in the UI (e.g. signal modal, integration cards). Exposed as Signal.integrationTitle. */
   name: string;
   /** Semantic version of the integration plugin (e.g. "1.0.0"). */
   version: string;
@@ -127,17 +127,13 @@ export type IntegrationManifest = Readonly<{
   description?: string;
   /** Link to documentation or product page. */
   docsUrl?: string;
-  /** Optional URL to a logo image (or asset key if using a bundler). */
-  logoUrl?: string;
-  /** Optional URL to a logo variant (e.g. with background) for cards. */
-  logoWithBackgroundUrl?: string;
-  /** Whether this integration requires the user to supply credentials (e.g. API key). */
-  requiresCredentials: boolean;
+  /** Whether this integration requires the user to supply config (e.g. API key). */
+  requiresConfig: boolean;
   /**
-   * Schema for credential fields when requiresCredentials is true.
+   * Schema for configuration fields when requiresConfig is true.
    * Enables UI generation and validation without hardcoding per-integration forms.
    */
-  credentialFields?: readonly IntegrationCredentialField[];
+  configurationFields?: readonly IntegrationConfigField[];
   /**
    * Optional list of signal type ids this integration provides (e.g. "ZENTROPI_LABELER").
    * Used by the platform to associate signals with this integration for display and gating.
@@ -151,6 +147,72 @@ export type IntegrationManifest = Readonly<{
    * registering.
    */
   modelCard?: ModelCard;
+  /**
+   * ------------------------------------------------------------
+   * LOGO/IMAGE SECTION:
+   * ------------------------------------------------------------
+   * The following logo/image sections are optional. If none provided will use a fallback Coop logo.
+   * 
+   * Provide either logoUrl and logoWithBackgroundUrl or logoPath and logoWithBackgroundPath.
+   * 
+   * If you provide logoPath and logoWithBackgroundPath, the server will serve the files at
+   * GET /api/v1/integration-logos/:integrationId and GET /api/v1/integration-logos/:integrationId/with-background
+   * and set logoUrl and logoWithBackgroundUrl accordingly.
+   * If you provide logoUrl and logoWithBackgroundUrl, the server will use those URLs directly.
+   * Prefered size: ~180x180px for logoUrl and ~120x120px for logoWithBackgroundUrl.
+   * Prefer a square or horizontal logo that scales well.
+   */
+  logoUrl?: string;
+  logoWithBackgroundUrl?: string;
+  logoPath?: string;
+  logoWithBackgroundPath?: string;
+}>;
+
+// ---------------------------------------------------------------------------
+// Plugin signals (for integrations that power routing/enforcement rules)
+// ---------------------------------------------------------------------------
+
+/** Context passed to plugin.createSignals() so the plugin can build signal instances with credential access. */
+export type PluginSignalContext = Readonly<{
+  /** Integration id (e.g. "ACME_API") from the plugin manifest. */
+  integrationId: string;
+  /** Get stored credential/config for an org. Resolves to the JSON stored for this integration. */
+  getCredential: (orgId: string) => Promise<Record<string, unknown>>;
+}>;
+
+/** Minimal signal descriptor returned by a plugin. The platform adapts this to its internal SignalBase. */
+export type PluginSignalDescriptor = Readonly<{
+  /** Stable signal type id (e.g. "ACME_MODERATION_SIGNAL"). Must match one of manifest.signalTypeIds. */
+  id: Readonly<{ type: string }>;
+  displayName: string;
+  description: string;
+  docsUrl: string | null;
+  recommendedThresholds: Readonly<{
+    highPrecisionThreshold: string | number;
+    highRecallThreshold: string | number;
+  }> | null;
+  supportedLanguages: readonly string[] | 'ALL';
+  pricingStructure: Readonly<{ type: 'FREE' | 'SUBSCRIPTION' }>;
+  eligibleInputs: readonly string[];
+  outputType: Readonly<{ scalarType: string }>;
+  getCost: () => number;
+  /** Run the signal. Input shape is platform-defined; result must have outputType and score. */
+  run: (input: unknown) => Promise<unknown>;
+  getDisabledInfo: (orgId: string) => Promise<
+    | { disabled: false; disabledMessage?: string }
+    | { disabled: true; disabledMessage: string }
+  >;
+  needsMatchingValues: boolean;
+  eligibleSubcategories: ReadonlyArray<{
+    id: string;
+    label: string;
+    description?: string;
+    childrenIds: readonly string[];
+  }>;
+  needsActionPenalties: boolean;
+  /** Integration id (same as context.integrationId). */
+  integration: string;
+  allowedInAutomatedRules: boolean;
 }>;
 
 /**
@@ -162,6 +224,9 @@ export type IntegrationManifest = Readonly<{
  *   const manifest: IntegrationManifest = { id: 'ACME_API', name: 'Acme API', ... };
  *   const plugin: CoopIntegrationPlugin = { manifest };
  *   export default plugin;
+ *
+ * To power routing/enforcement rules, also implement createSignals(context) and
+ * return one descriptor per manifest.signalTypeIds entry.
  */
 export type CoopIntegrationPlugin = Readonly<{
   manifest: IntegrationManifest;
@@ -170,6 +235,14 @@ export type CoopIntegrationPlugin = Readonly<{
    * If present, adopters can pass non-secret config in the integrations config file.
    */
   configSchema?: unknown;
+  /**
+   * Optional. If this integration provides signals for use in rules, implement this.
+   * Return one descriptor per signal type id listed in manifest.signalTypeIds.
+   * The platform will register these so they appear in the rule builder and can be used in conditions.
+   */
+  createSignals?: (
+    context: PluginSignalContext,
+  ) => ReadonlyArray<Readonly<{ signalTypeId: string; signal: PluginSignalDescriptor }>>;
 }>;
 
 /**
@@ -206,7 +279,7 @@ export type CoopIntegrationsConfig = Readonly<{
  * Shape of the config stored in the database for each integration (per org).
  * Stored in a generic table as JSON: one row per (org_id, integration_id) with
  * config as a JSON-serializable object. Each integration defines its own required
- * fields via IntegrationManifest.credentialFields; the app validates and
+ * fields via IntegrationManifest.configurationFields; the app validates and
  * serializes/deserializes to this type.
  *
  * Only JSON-serializable values (no functions, symbols, or BigInt) should be
@@ -232,6 +305,6 @@ export function isCoopIntegrationPlugin(
     typeof m.id === 'string' &&
     typeof m.name === 'string' &&
     typeof m.version === 'string' &&
-    typeof m.requiresCredentials === 'boolean'
+    typeof m.requiresConfig === 'boolean'
   );
 }
