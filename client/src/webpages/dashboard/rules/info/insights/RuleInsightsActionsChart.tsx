@@ -7,7 +7,7 @@ import last from 'lodash/last';
 import orderBy from 'lodash/orderBy';
 import sortBy from 'lodash/sortBy';
 import sumBy from 'lodash/sumBy';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
 import { ReactNode, useCallback, useMemo, useState } from 'react';
 import {
   Bar,
@@ -124,7 +124,7 @@ export default function RuleInsightsActionsChart(props: { ruleId: string }) {
           new Date(a.date).getTime() - new Date(b.date).getTime(),
       )
       .map((actionData: any) => ({
-        date: format(parseISO(actionData.date), 'MM/dd/yy'),
+        date: format(new Date(actionData.date), 'MM/dd/yy'),
         totalMatches: actionData.totalMatches,
         totalRequests: actionData.totalRequests,
       }));
