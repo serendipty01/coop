@@ -51,6 +51,8 @@ gql`
 
   query GetSSOOidcCallbackUrl {
     getSSOOidcCallbackUrl
+    getSSOSamlCallbackUrl
+    getSSOEntityId
   }
 
   mutation UpdateSSOSamlCredentials($input: UpdateSSOSamlCredentialsInput!) {
@@ -120,8 +122,9 @@ export default function SSOSettings() {
   const isCurrentTabActive = activeTab === currentMethod;
   const isSwitching = !isCurrentTabActive && currentMethod !== 'Password';
 
-  const samlCallbackUri = `https://getcoop.com/api/v1/saml/login/${data?.myOrg?.id}/callback`;
+  const samlCallbackUri = callbackData?.getSSOSamlCallbackUrl ?? '';
   const oidcCallbackUri = callbackData?.getSSOOidcCallbackUrl ?? '';
+  const entityId = callbackData?.getSSOEntityId ?? '';
 
   const stringIsAValidUrl = (s: string) => {
     try {
@@ -321,7 +324,7 @@ export default function SSOSettings() {
               id="SpEntityId"
               type="text"
               className="tracking-widest"
-              value="https://getcoop.com"
+              value={entityId}
               disabled
               endSlot={
                 <div className="flex">
@@ -331,7 +334,7 @@ export default function SSOSettings() {
                         variant="white"
                         size="icon"
                         className="h-[2.875rem] rounded-none rounded-r-lg border-l-0"
-                        onClick={async () => copyText('https://getcoop.com')}
+                        onClick={async () => copyText(entityId)}
                       >
                         <Clipboard />
                       </Button>
@@ -421,8 +424,10 @@ export default function SSOSettings() {
               placeholder="your-tenant.auth0.com"
               value={issuerUrl}
               onChange={(e) => setIssuerUrl(e.target.value)}
-
             />
+            <Text as="span" size="XS" className="text-gray-500">
+              Domain only — no https:// prefix or path (e.g. your-tenant.auth0.com)
+            </Text>
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="clientId">Client ID</Label>

@@ -3183,8 +3183,10 @@ export type GQLQuery = {
   readonly getRecentDecisions: ReadonlyArray<GQLManualReviewDecision>;
   readonly getResolvedJobCounts: ReadonlyArray<GQLResolvedJobCount>;
   readonly getResolvedJobsForUser: Scalars['Int'];
+  readonly getSSOEntityId?: Maybe<Scalars['String']>;
   readonly getSSOOidcCallbackUrl?: Maybe<Scalars['String']>;
   readonly getSSORedirectUrl?: Maybe<Scalars['String']>;
+  readonly getSSOSamlCallbackUrl?: Maybe<Scalars['String']>;
   readonly getSkippedJobCounts: ReadonlyArray<GQLSkippedJobCount>;
   readonly getSkippedJobsForUser: Scalars['Int'];
   readonly getSkipsForRecentDecisions: ReadonlyArray<GQLSkippedJob>;
@@ -24159,6 +24161,8 @@ export type GQLGetSsoOidcCallbackUrlQueryVariables = Exact<{
 export type GQLGetSsoOidcCallbackUrlQuery = {
   readonly __typename: 'Query';
   readonly getSSOOidcCallbackUrl?: string | null;
+  readonly getSSOSamlCallbackUrl?: string | null;
+  readonly getSSOEntityId?: string | null;
 };
 
 export type GQLUpdateSsoSamlCredentialsMutationVariables = Exact<{
@@ -37917,6 +37921,8 @@ export type GQLGetSsoCredentialsQueryResult = Apollo.QueryResult<
 export const GQLGetSsoOidcCallbackUrlDocument = gql`
   query GetSSOOidcCallbackUrl {
     getSSOOidcCallbackUrl
+    getSSOSamlCallbackUrl
+    getSSOEntityId
   }
 `;
 

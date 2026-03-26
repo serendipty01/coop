@@ -37,6 +37,19 @@ export class SSOService {
       }
       return `${API_BASE_URL}/api/v1/oidc/login/callback`;
   }
+
+  getSSOEntityId(): string {
+    const { UI_URL } = process.env;
+    return UI_URL ?? '';
+  }
+
+  getSSOSamlCallbackUrl(orgId: string): string {
+    const { API_BASE_URL } = process.env;
+    if (!API_BASE_URL) {
+      return "";
+    }
+    return `${API_BASE_URL}/api/v1/saml/login/${orgId}/callback`;
+  }
 }
 
 export default inject(['KyselyPg'], SSOService);

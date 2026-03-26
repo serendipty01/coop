@@ -246,13 +246,19 @@ export default async function makeApiServer(deps: Dependencies) {
             // robust, not that it will likely matter.
             callbackUrl: `${deps.ConfigService.uiUrl}/api/v1/saml/login/${orgId}/callback`,
             issuer: deps.ConfigService.uiUrl,
+            // Auth0 signs the assertion but not the outer response by default.
+            // Accept assertion-level signatures only.
+            wantAuthnResponseSigned: false,
           });
         },
       },
       async (_req, profile, done) => {
         try {
+          const email = profile?.email ?? profile?.nameID;
+          // eslint-disable-next-line no-console
+          console.log('[SAML] Login attempt for email:', email);
           const user = await User.findOne({
-            where: { email: String(profile?.email) },
+            where: { email: String(email) },
           });
           // we should have already checked for this, but couldn't hurt to check
           // again

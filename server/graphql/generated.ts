@@ -3252,8 +3252,10 @@ export type GQLQuery = {
   readonly getRecentDecisions: ReadonlyArray<GQLManualReviewDecision>;
   readonly getResolvedJobCounts: ReadonlyArray<GQLResolvedJobCount>;
   readonly getResolvedJobsForUser: Scalars['Int'];
+  readonly getSSOEntityId?: Maybe<Scalars['String']>;
   readonly getSSOOidcCallbackUrl?: Maybe<Scalars['String']>;
   readonly getSSORedirectUrl?: Maybe<Scalars['String']>;
+  readonly getSSOSamlCallbackUrl?: Maybe<Scalars['String']>;
   readonly getSkippedJobCounts: ReadonlyArray<GQLSkippedJobCount>;
   readonly getSkippedJobsForUser: Scalars['Int'];
   readonly getSkipsForRecentDecisions: ReadonlyArray<GQLSkippedJob>;
@@ -11928,6 +11930,11 @@ export type GQLQueryResolvers<
     ContextType,
     RequireFields<GQLQueryGetResolvedJobsForUserArgs, 'timeZone'>
   >;
+  getSSOEntityId?: Resolver<
+    Maybe<GQLResolversTypes['String']>,
+    ParentType,
+    ContextType
+  >;
   getSSOOidcCallbackUrl?: Resolver<
     Maybe<GQLResolversTypes['String']>,
     ParentType,
@@ -11938,6 +11945,11 @@ export type GQLQueryResolvers<
     ParentType,
     ContextType,
     RequireFields<GQLQueryGetSsoRedirectUrlArgs, 'emailAddress'>
+  >;
+  getSSOSamlCallbackUrl?: Resolver<
+    Maybe<GQLResolversTypes['String']>,
+    ParentType,
+    ContextType
   >;
   getSkippedJobCounts?: Resolver<
     ReadonlyArray<GQLResolversTypes['SkippedJobCount']>,
