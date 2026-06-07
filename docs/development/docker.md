@@ -73,6 +73,95 @@ docker compose -f docker-compose.images.yaml down
 docker compose -f docker-compose.images.yaml down -v
 ```
 
+## Upgrading PostgreSQL
+
+When the `postgres` image version changes across a **major** PostgreSQL version (e.g. 15 → 17), the on-disk data format is incompatible. You must export your data before swapping the image, then restore it into the new container.
+
+> [!WARNING]
+> Do not skip the backup step. Deleting the `pg_data` volume without a dump will permanently destroy all data.
+
+### Step-by-step migration
+
+Go to your Coop docker compose directory and create a backup folder:
+
+```bash
+mkdir -p ~/coop-pg-backup
+```
+
+Stop all services except the database so nothing is writing during the export:
+
+```bash
+docker compose -f docker-compose.images.yaml stop server migrations seed client
+```
+
+Dump the entire database cluster:
+
+```bash
+docker compose -f docker-compose.images.yaml exec postgres \
+  pg_dumpall -U postgres > ~/coop-pg-backup/pg.dump
+```
+
+Verify the dump is non-empty before continuing:
+
+```bash
+ls -lh ~/coop-pg-backup/pg.dump
+# should be several MB, not 0 bytes
+```
+
+Stop the database container:
+
+```bash
+docker compose -f docker-compose.images.yaml stop postgres
+```
+
+Pull the latest images (which includes the new PostgreSQL version):
+
+```bash
+docker compose -f docker-compose.images.yaml pull
+```
+
+Delete the old data volume — it is incompatible with the new major version:
+
+```bash
+docker volume rm coop_pg_data
+```
+
+Start the new PostgreSQL container and wait for it to be healthy:
+
+```bash
+docker compose -f docker-compose.images.yaml up -d postgres
+docker compose -f docker-compose.images.yaml ps  # wait until postgres shows "(healthy)"
+```
+
+Restore the dump into the new container:
+
+```bash
+docker compose -f docker-compose.images.yaml exec -T postgres \
+  psql -U postgres < ~/coop-pg-backup/pg.dump
+```
+
+> [!NOTE]
+> The restore will print a few harmless errors like `role "postgres" already exists` — these are expected and safe to ignore.
+
+Start the rest of the stack:
+
+```bash
+docker compose -f docker-compose.images.yaml up -d
+```
+
+Verify the upgrade succeeded:
+
+```bash
+docker compose -f docker-compose.images.yaml exec postgres \
+  psql -U postgres -c "SELECT version();"
+```
+
+Once everything is working you can remove the backup file:
+
+```bash
+rm ~/coop-pg-backup/pg.dump
+```
+
 ## Image details
 
 | Image         | Dockerfile          | Build target          | Base                              |
