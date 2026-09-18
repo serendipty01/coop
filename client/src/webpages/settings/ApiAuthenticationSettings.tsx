@@ -5,6 +5,7 @@ import { Link } from '@/coop-ui/Link';
 import { Textarea } from '@/coop-ui/Textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/coop-ui/Tooltip';
 import { Heading, Text } from '@/coop-ui/Typography';
+import { DOCS_URL } from '@/lib/config';
 import { Clipboard, Eye, EyeClosed, RotateCcw } from 'lucide-react';
 import { useState } from 'react';
 import { Helmet } from 'react-helmet-async';
@@ -362,7 +363,7 @@ const ApiAuthenticationSettings = () => {
           verify that the request is valid and came from Coop. To learn how to
           verify requests with this secret, see our{' '}
           <Link
-            href="https://roostorg.github.io/coop/api_authentication.html#verifying-incoming-requests-from-coop"
+            href={`${DOCS_URL}/development/api-auth.html#verifying-incoming-requests-from-coop`}
             target="_blank"
           >
             API Keys and Authentication
