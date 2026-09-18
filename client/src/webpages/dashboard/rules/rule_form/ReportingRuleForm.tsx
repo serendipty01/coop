@@ -1148,7 +1148,6 @@ export default function RuleForm() {
               iconStyle="stroke"
               onClick={() => {
                 navigate(`/dashboard/rules/report/form?duplicate_id=${id}`);
-                // See https://github.com/roostorg/coop/pull/3803#discussion_r1643632962
                 navigate(0);
               }}
               size="small"

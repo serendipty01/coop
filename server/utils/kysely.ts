@@ -121,7 +121,7 @@ export type FixSingleTableReturnedRowType<
 > =
   // We need to destructure the two selections out of the MergePartial in order
   // to properly track that the second set of columns are optional in the
-  // result. See `MergePartial` and https://github.com/roostorg/coop/pull/1248
+  // result. See `MergePartial`
   Builder extends SelectQueryBuilder<
     infer DB,
     infer TB,

@@ -359,8 +359,7 @@ const maintainabilityReadabilityRules = {
           except: [`index.js`, `index.ts`],
           message:
             'Each service exposes its public exports through an index file, ' +
-            'so consumers of the service must only import from that file. ' +
-            'See rationale in https://github.com/roostorg/coop/pull/1643',
+            'so consumers of the service must only import from that file. ',
         })),
       ],
     },

@@ -87,13 +87,6 @@ const ARTIFICIAL_LIMIT_MULTIPLIER = 1;
  * This occurs when the service has to make multiple queries to the datastores
  * to fulfill a request, and the full set of submissions that make up an item's
  * submission history ends up split across the query-boundary.
- *
- * The first explanation of this was left in a github comment:
- * https://github.com/roostorg/coop/pull/1605#issuecomment-1721584595
- *
- * and there is a JIRA task for the fix:
- * https://coop.atlassian.net/browse/COOP-1291
- *
  */
 export type SubmissionsForItemWithTypeIdentifier = {
   latestSubmission: ItemSubmissionWithTypeIdentifier;

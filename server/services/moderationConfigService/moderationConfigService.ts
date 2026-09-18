@@ -87,8 +87,7 @@ type UserTypeSchemaFieldRoles = {
  * except for the org’s users (which are fairly disconnected).
  *
  * The scope of this service is intentionally very broad, and it should not be
- * sub-divided lightly; see the rationale at
- * https://coop.atlassian.net/browse/COOP-743?focusedCommentId=10223
+ * sub-divided lightly.
  */
 export class ModerationConfigService implements ReturnsModerationConfigTypes {
   private readonly actionOps: ActionOperations;
