@@ -899,7 +899,6 @@ function ManualReviewJobReviewImpl(props: {
             orgId={org.id}
             payload={payload}
             isActionable={true}
-            showMessages={true}
             submitDecision={async (decision) => {
               await submitDecision({
                 variables: {
