@@ -8,6 +8,10 @@ For more information about each release including git tags and artifacts, see [R
 
 ## [Unreleased]
 
+### Changed
+
+- Switch the package manager from npm to pnpm ([#669](https://github.com/roostorg/coop/pull/669) by [@serendipty01](https://github.com/serendipty01))
+
 ### Fixed
 
 - Zentropi Labeler signal failing on every call; labeler versions now require a labeler ID ([#1335](https://github.com/roostorg/coop/pull/1335) by [@reitblatt](https://github.com/reitblatt))
