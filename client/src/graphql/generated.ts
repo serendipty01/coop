@@ -3375,6 +3375,22 @@ export type GQLNcmecReportedMediaDetails = {
   readonly url: Scalars['String']['output'];
 };
 
+export type GQLNcmecReportsPage = {
+  readonly __typename: 'NcmecReportsPage';
+  /** Absent on the last page. */
+  readonly nextCursor?: Maybe<Scalars['Cursor']['output']>;
+  readonly reports: ReadonlyArray<GQLNcmecReport>;
+};
+
+export type GQLNcmecReportsPageInput = {
+  /** Opaque cursor from a previous page. Absent for the newest page. */
+  readonly cursor?: InputMaybe<Scalars['Cursor']['input']>;
+  /** Reports per page. Defaults to 50, capped at 100. */
+  readonly limit?: InputMaybe<Scalars['Int']['input']>;
+  /** Matches part of a report ID or user ID. */
+  readonly search?: InputMaybe<Scalars['String']['input']>;
+};
+
 export type GQLNcmecThreadInput = {
   readonly reportedContent: ReadonlyArray<GQLNcmecContentInThreadReport>;
   readonly threadId: Scalars['ID']['input'];
@@ -3470,7 +3486,10 @@ export type GQLOrg = {
    * report when ncmecMediaReviewRequirement is MINIMUM. Defaults to 1.
    */
   readonly ncmecMinMediaToReview: Scalars['Int']['output'];
+  /** @deprecated Returns only the newest 300 reports. Use ncmecReportsPage. */
   readonly ncmecReports: ReadonlyArray<GQLNcmecReport>;
+  /** One page of the org's filed NCMEC reports, newest first. */
+  readonly ncmecReportsPage: GQLNcmecReportsPage;
   readonly onCallAlertEmail?: Maybe<Scalars['String']['output']>;
   readonly partialItemsEndpoint?: Maybe<Scalars['String']['output']>;
   readonly partialItemsRequestHeaders?: Maybe<Scalars['JSONObject']['output']>;
@@ -3493,6 +3512,10 @@ export type GQLOrg = {
   readonly users: ReadonlyArray<GQLUser>;
   readonly usersWhoCanReviewEveryQueue: ReadonlyArray<GQLUser>;
   readonly websiteUrl: Scalars['String']['output'];
+};
+
+export type GQLOrgNcmecReportsPageArgs = {
+  input?: InputMaybe<GQLNcmecReportsPageInput>;
 };
 
 export type GQLOrgSignalsArgs = {
@@ -19557,37 +19580,8 @@ export type GQLAllNcmecReportsQuery = {
   readonly __typename: 'Query';
   readonly myOrg?: {
     readonly __typename: 'Org';
+    readonly id: string;
     readonly hasNCMECReportingEnabled: boolean;
-    readonly ncmecReports: ReadonlyArray<{
-      readonly __typename: 'NCMECReport';
-      readonly ts: Date | string;
-      readonly reportId: string;
-      readonly userId: string;
-      readonly reviewerId?: string | null;
-      readonly reportXml: string;
-      readonly isTest?: boolean | null;
-      readonly userItemType: {
-        readonly __typename: 'UserItemType';
-        readonly name: string;
-      };
-      readonly reportedMedia: ReadonlyArray<{
-        readonly __typename: 'NCMECReportedMedia';
-        readonly id: string;
-        readonly xml: string;
-      }>;
-      readonly additionalFiles: ReadonlyArray<{
-        readonly __typename: 'NcmecAdditionalFile';
-        readonly url: string;
-        readonly xml: string;
-        readonly ncmecFileId: string;
-      }>;
-      readonly reportedMessages: ReadonlyArray<{
-        readonly __typename: 'NCMECReportedThread';
-        readonly fileName: string;
-        readonly csv: string;
-        readonly ncmecFileId: string;
-      }>;
-    }>;
     readonly failedNcmecSubmissions: ReadonlyArray<{
       readonly __typename: 'NcmecFailedSubmission';
       readonly decisionId: string;
@@ -19621,41 +19615,49 @@ export type GQLPermissionsQuery = {
   } | null;
 };
 
-export type GQLGetNcmecReportQueryVariables = Exact<{
-  reportId: Scalars['ID']['input'];
+export type GQLNcmecReportsPageQueryVariables = Exact<{
+  input?: InputMaybe<GQLNcmecReportsPageInput>;
 }>;
 
-export type GQLGetNcmecReportQuery = {
+export type GQLNcmecReportsPageQuery = {
   readonly __typename: 'Query';
-  readonly ncmecReportById?: {
-    readonly __typename: 'NCMECReport';
-    readonly ts: Date | string;
-    readonly reportId: string;
-    readonly userId: string;
-    readonly reviewerId?: string | null;
-    readonly reportXml: string;
-    readonly isTest?: boolean | null;
-    readonly userItemType: {
-      readonly __typename: 'UserItemType';
-      readonly name: string;
+  readonly myOrg?: {
+    readonly __typename: 'Org';
+    readonly id: string;
+    readonly ncmecReportsPage: {
+      readonly __typename: 'NcmecReportsPage';
+      readonly nextCursor?: string | null;
+      readonly reports: ReadonlyArray<{
+        readonly __typename: 'NCMECReport';
+        readonly ts: Date | string;
+        readonly reportId: string;
+        readonly userId: string;
+        readonly reviewerId?: string | null;
+        readonly reportXml: string;
+        readonly isTest?: boolean | null;
+        readonly userItemType: {
+          readonly __typename: 'UserItemType';
+          readonly name: string;
+        };
+        readonly reportedMedia: ReadonlyArray<{
+          readonly __typename: 'NCMECReportedMedia';
+          readonly id: string;
+          readonly xml: string;
+        }>;
+        readonly additionalFiles: ReadonlyArray<{
+          readonly __typename: 'NcmecAdditionalFile';
+          readonly url: string;
+          readonly xml: string;
+          readonly ncmecFileId: string;
+        }>;
+        readonly reportedMessages: ReadonlyArray<{
+          readonly __typename: 'NCMECReportedThread';
+          readonly fileName: string;
+          readonly csv: string;
+          readonly ncmecFileId: string;
+        }>;
+      }>;
     };
-    readonly reportedMedia: ReadonlyArray<{
-      readonly __typename: 'NCMECReportedMedia';
-      readonly id: string;
-      readonly xml: string;
-    }>;
-    readonly additionalFiles: ReadonlyArray<{
-      readonly __typename: 'NcmecAdditionalFile';
-      readonly url: string;
-      readonly xml: string;
-      readonly ncmecFileId: string;
-    }>;
-    readonly reportedMessages: ReadonlyArray<{
-      readonly __typename: 'NCMECReportedThread';
-      readonly fileName: string;
-      readonly csv: string;
-      readonly ncmecFileId: string;
-    }>;
   } | null;
 };
 
@@ -39446,10 +39448,8 @@ export type GQLManualReviewDecisionInsightsFilterByInfoQueryResult =
 export const GQLAllNcmecReportsDocument = gql`
   query AllNCMECReports {
     myOrg {
+      id
       hasNCMECReportingEnabled
-      ncmecReports {
-        ...NCMECReportValues
-      }
       failedNcmecSubmissions {
         ...NcmecFailedSubmissionValues
       }
@@ -39460,7 +39460,6 @@ export const GQLAllNcmecReportsDocument = gql`
       }
     }
   }
-  ${GQLNcmecReportValuesFragmentDoc}
   ${GQLNcmecFailedSubmissionValuesFragmentDoc}
 `;
 
@@ -39652,86 +39651,88 @@ export type GQLPermissionsQueryResult = Apollo.QueryResult<
   GQLPermissionsQuery,
   GQLPermissionsQueryVariables
 >;
-export const GQLGetNcmecReportDocument = gql`
-  query GetNCMECReport($reportId: ID!) {
-    ncmecReportById(reportId: $reportId) {
-      ...NCMECReportValues
+export const GQLNcmecReportsPageDocument = gql`
+  query NcmecReportsPage($input: NcmecReportsPageInput) {
+    myOrg {
+      id
+      ncmecReportsPage(input: $input) {
+        reports {
+          ...NCMECReportValues
+        }
+        nextCursor
+      }
     }
   }
   ${GQLNcmecReportValuesFragmentDoc}
 `;
 
 /**
- * __useGQLGetNcmecReportQuery__
+ * __useGQLNcmecReportsPageQuery__
  *
- * To run a query within a React component, call `useGQLGetNcmecReportQuery` and pass it any options that fit your needs.
- * When your component renders, `useGQLGetNcmecReportQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * To run a query within a React component, call `useGQLNcmecReportsPageQuery` and pass it any options that fit your needs.
+ * When your component renders, `useGQLNcmecReportsPageQuery` returns an object from Apollo Client that contains loading, error, and data properties
  * you can use to render your UI.
  *
  * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
  *
  * @example
- * const { data, loading, error } = useGQLGetNcmecReportQuery({
+ * const { data, loading, error } = useGQLNcmecReportsPageQuery({
  *   variables: {
- *      reportId: // value for 'reportId'
+ *      input: // value for 'input'
  *   },
  * });
  */
-export function useGQLGetNcmecReportQuery(
-  baseOptions: Apollo.QueryHookOptions<
-    GQLGetNcmecReportQuery,
-    GQLGetNcmecReportQueryVariables
-  > &
-    (
-      | { variables: GQLGetNcmecReportQueryVariables; skip?: boolean }
-      | { skip: boolean }
-    ),
+export function useGQLNcmecReportsPageQuery(
+  baseOptions?: Apollo.QueryHookOptions<
+    GQLNcmecReportsPageQuery,
+    GQLNcmecReportsPageQueryVariables
+  >,
 ) {
   const options = { ...defaultOptions, ...baseOptions };
   return Apollo.useQuery<
-    GQLGetNcmecReportQuery,
-    GQLGetNcmecReportQueryVariables
-  >(GQLGetNcmecReportDocument, options);
+    GQLNcmecReportsPageQuery,
+    GQLNcmecReportsPageQueryVariables
+  >(GQLNcmecReportsPageDocument, options);
 }
-export function useGQLGetNcmecReportLazyQuery(
+export function useGQLNcmecReportsPageLazyQuery(
   baseOptions?: Apollo.LazyQueryHookOptions<
-    GQLGetNcmecReportQuery,
-    GQLGetNcmecReportQueryVariables
+    GQLNcmecReportsPageQuery,
+    GQLNcmecReportsPageQueryVariables
   >,
 ) {
   const options = { ...defaultOptions, ...baseOptions };
   return Apollo.useLazyQuery<
-    GQLGetNcmecReportQuery,
-    GQLGetNcmecReportQueryVariables
-  >(GQLGetNcmecReportDocument, options);
+    GQLNcmecReportsPageQuery,
+    GQLNcmecReportsPageQueryVariables
+  >(GQLNcmecReportsPageDocument, options);
 }
 // @ts-ignore
-export function useGQLGetNcmecReportSuspenseQuery(
+export function useGQLNcmecReportsPageSuspenseQuery(
   baseOptions?: Apollo.SuspenseQueryHookOptions<
-    GQLGetNcmecReportQuery,
-    GQLGetNcmecReportQueryVariables
+    GQLNcmecReportsPageQuery,
+    GQLNcmecReportsPageQueryVariables
   >,
 ): Apollo.UseSuspenseQueryResult<
-  GQLGetNcmecReportQuery,
-  GQLGetNcmecReportQueryVariables
+  GQLNcmecReportsPageQuery,
+  GQLNcmecReportsPageQueryVariables
 >;
-export function useGQLGetNcmecReportSuspenseQuery(
+export function useGQLNcmecReportsPageSuspenseQuery(
   baseOptions?:
     | Apollo.SkipToken
     | Apollo.SuspenseQueryHookOptions<
-        GQLGetNcmecReportQuery,
-        GQLGetNcmecReportQueryVariables
+        GQLNcmecReportsPageQuery,
+        GQLNcmecReportsPageQueryVariables
       >,
 ): Apollo.UseSuspenseQueryResult<
-  GQLGetNcmecReportQuery | undefined,
-  GQLGetNcmecReportQueryVariables
+  GQLNcmecReportsPageQuery | undefined,
+  GQLNcmecReportsPageQueryVariables
 >;
-export function useGQLGetNcmecReportSuspenseQuery(
+export function useGQLNcmecReportsPageSuspenseQuery(
   baseOptions?:
     | Apollo.SkipToken
     | Apollo.SuspenseQueryHookOptions<
-        GQLGetNcmecReportQuery,
-        GQLGetNcmecReportQueryVariables
+        GQLNcmecReportsPageQuery,
+        GQLNcmecReportsPageQueryVariables
       >,
 ) {
   const options =
@@ -39739,22 +39740,22 @@ export function useGQLGetNcmecReportSuspenseQuery(
       ? baseOptions
       : { ...defaultOptions, ...baseOptions };
   return Apollo.useSuspenseQuery<
-    GQLGetNcmecReportQuery,
-    GQLGetNcmecReportQueryVariables
-  >(GQLGetNcmecReportDocument, options);
+    GQLNcmecReportsPageQuery,
+    GQLNcmecReportsPageQueryVariables
+  >(GQLNcmecReportsPageDocument, options);
 }
-export type GQLGetNcmecReportQueryHookResult = ReturnType<
-  typeof useGQLGetNcmecReportQuery
+export type GQLNcmecReportsPageQueryHookResult = ReturnType<
+  typeof useGQLNcmecReportsPageQuery
 >;
-export type GQLGetNcmecReportLazyQueryHookResult = ReturnType<
-  typeof useGQLGetNcmecReportLazyQuery
+export type GQLNcmecReportsPageLazyQueryHookResult = ReturnType<
+  typeof useGQLNcmecReportsPageLazyQuery
 >;
-export type GQLGetNcmecReportSuspenseQueryHookResult = ReturnType<
-  typeof useGQLGetNcmecReportSuspenseQuery
+export type GQLNcmecReportsPageSuspenseQueryHookResult = ReturnType<
+  typeof useGQLNcmecReportsPageSuspenseQuery
 >;
-export type GQLGetNcmecReportQueryResult = Apollo.QueryResult<
-  GQLGetNcmecReportQuery,
-  GQLGetNcmecReportQueryVariables
+export type GQLNcmecReportsPageQueryResult = Apollo.QueryResult<
+  GQLNcmecReportsPageQuery,
+  GQLNcmecReportsPageQueryVariables
 >;
 export const GQLRetryNcmecSubmissionDocument = gql`
   mutation RetryNcmecSubmission($decisionId: ID!) {
@@ -46633,7 +46634,7 @@ export const namedOperations = {
       'ManualReviewDecisionInsightsFilterByInfo',
     AllNCMECReports: 'AllNCMECReports',
     Permissions: 'Permissions',
-    GetNCMECReport: 'GetNCMECReport',
+    NcmecReportsPage: 'NcmecReportsPage',
     IsWarehouseAvailable: 'IsWarehouseAvailable',
     TotalPendingJobs: 'TotalPendingJobs',
     RuleNamesAndIds: 'RuleNamesAndIds',

@@ -1518,6 +1518,70 @@ export default class NcmecReporting {
     );
   }
 
+  /** One page of the org's filed reports, newest first. `afterReportId` is
+   * the last report of the previous page; `search` matches part of a report
+   * ID or user ID. Another reviewer's test reports are never included. */
+  async getNcmecReportsPage(opts: {
+    orgId: string;
+    reviewerId: string;
+    afterReportId: string | undefined;
+    search: string | undefined;
+    limit: number;
+  }) {
+    const { orgId, reviewerId, afterReportId, search, limit } = opts;
+    let query = this.pqQueryReadReplica
+      .selectFrom('ncmec_reporting.ncmec_reports as r')
+      .select([
+        'r.created_at as ts',
+        'r.report_id as reportId',
+        'r.user_id as userId',
+        'r.user_item_type_id as userItemTypeId',
+        'r.reviewer_id as reviewerId',
+        'r.reported_media as reportedMedia',
+        'r.report_xml as reportXml',
+        'r.additional_files as additionalFiles',
+        'r.reported_messages as reportedMessages',
+        'r.is_test as isTest',
+      ])
+      .where('r.org_id', '=', orgId)
+      .where((eb) =>
+        eb.or([
+          eb('r.is_test', '=', false),
+          eb('r.reviewer_id', '=', reviewerId),
+        ]),
+      );
+    if (afterReportId !== undefined) {
+      // Compare against the stored timestamp, not one round-tripped through a
+      // JS Date, which would drop its microseconds.
+      query = query.where(
+        sql<boolean>`(r.created_at, r.report_id) < (
+          select c.created_at, c.report_id
+          from ncmec_reporting.ncmec_reports c
+          where c.org_id = ${orgId} and c.report_id = ${afterReportId}
+        )`,
+      );
+    }
+    if (search !== undefined && search !== '') {
+      query = query.where((eb) =>
+        eb.or([
+          eb(sql`strpos(r.report_id, ${search})`, '>', 0),
+          eb(sql`strpos(r.user_id, ${search})`, '>', 0),
+        ]),
+      );
+    }
+    const rows = await query
+      .orderBy('r.created_at', 'desc')
+      .orderBy('r.report_id', 'desc')
+      .limit(limit + 1)
+      .execute();
+    const reports = rows.slice(0, limit);
+    return {
+      reports,
+      nextAfterReportId:
+        rows.length > limit ? reports[reports.length - 1].reportId : null,
+    };
+  }
+
   // Retrieves a list of all users with a valid NCMEC decision, in the trio of
   // (user_id, user_item_type_id, org_id) for uniqueness, before an hour before
   // it executes, to allow for concurrent decisions to finish executing. Only

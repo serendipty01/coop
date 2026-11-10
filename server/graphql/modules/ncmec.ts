@@ -150,6 +150,21 @@ const typeDefs = /* GraphQL */ `
     url: String!
   }
 
+  input NcmecReportsPageInput {
+    "Opaque cursor from a previous page. Absent for the newest page."
+    cursor: Cursor
+    "Reports per page. Defaults to 50, capped at 100."
+    limit: Int
+    "Matches part of a report ID or user ID."
+    search: String
+  }
+
+  type NcmecReportsPage {
+    reports: [NCMECReport!]!
+    "Absent on the last page."
+    nextCursor: Cursor
+  }
+
   type NCMECReport {
     reportId: String!
     ts: DateTime!

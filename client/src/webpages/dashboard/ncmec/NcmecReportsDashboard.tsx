@@ -2,7 +2,7 @@ import { toast } from '@/coop-ui/Toast';
 import {
   GQLUserPermission,
   useGQLAllNcmecReportsQuery,
-  useGQLGetNcmecReportLazyQuery,
+  useGQLNcmecReportsPageQuery,
   useGQLPermissionsQuery,
   useGQLRetryNcmecSubmissionMutation,
 } from '@/graphql/generated';
@@ -11,7 +11,13 @@ import { filterNullOrUndefined } from '@/utils/collections';
 import { gql } from '@apollo/client';
 import { Button, Checkbox, Input, Tag, Tooltip } from 'antd';
 import { format } from 'date-fns';
-import { Download, LayoutGrid as GridAlt, Scale } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  LayoutGrid as GridAlt,
+  Scale,
+} from 'lucide-react';
 import {
   useCallback,
   useEffect,
@@ -114,10 +120,8 @@ gql`
 
   query AllNCMECReports {
     myOrg {
+      id
       hasNCMECReportingEnabled
-      ncmecReports {
-        ...NCMECReportValues
-      }
       failedNcmecSubmissions {
         ...NcmecFailedSubmissionValues
       }
@@ -135,9 +139,15 @@ gql`
     }
   }
 
-  query GetNCMECReport($reportId: ID!) {
-    ncmecReportById(reportId: $reportId) {
-      ...NCMECReportValues
+  query NcmecReportsPage($input: NcmecReportsPageInput) {
+    myOrg {
+      id
+      ncmecReportsPage(input: $input) {
+        reports {
+          ...NCMECReportValues
+        }
+        nextCursor
+      }
     }
   }
 
@@ -197,7 +207,11 @@ const columnLabels: Record<ColumnId, string> = {
 
 export default function NcmecReportsDashboard() {
   const navigate = useNavigate();
-  const [searchId, setSearchId] = useState<string | undefined>(undefined);
+  const [search, setSearch] = useState('');
+  // `cursorStack` holds the starting cursor of every page before this one, so
+  // Previous can go back; the newest page starts at `undefined`.
+  const [cursor, setCursor] = useState<string | undefined>(undefined);
+  const [cursorStack, setCursorStack] = useState<(string | undefined)[]>([]);
   const { data: permissionsData, loading: permissionsLoading } =
     useGQLPermissionsQuery();
 
@@ -206,21 +220,39 @@ export default function NcmecReportsDashboard() {
     error: allReportsError,
     data: allReportsData,
   } = useGQLAllNcmecReportsQuery();
-  const {
-    hasNCMECReportingEnabled,
-    ncmecReports,
-    failedNcmecSubmissions,
-    users,
-  } = allReportsData?.myOrg ?? {};
+  const { hasNCMECReportingEnabled, failedNcmecSubmissions, users } =
+    allReportsData?.myOrg ?? {};
 
-  const [
-    getNcmecReportById,
-    {
-      loading: ncmecReportLoading,
-      error: ncmecReportError,
-      data: ncmecReportData,
-    },
-  ] = useGQLGetNcmecReportLazyQuery();
+  const {
+    loading: pageLoading,
+    error: pageError,
+    data: pageData,
+    previousData: previousPageData,
+  } = useGQLNcmecReportsPageQuery({
+    variables: { input: { cursor, search: search || undefined } },
+  });
+  // Keep the current rows on screen while the next page loads.
+  const reportsPage = (pageData ?? previousPageData)?.myOrg?.ncmecReportsPage;
+  const ncmecReports = reportsPage?.reports;
+  const isFirstPage = cursorStack.length === 0;
+
+  const handleSearch = (value: string) => {
+    setSearch(value.trim());
+    setCursor(undefined);
+    setCursorStack([]);
+  };
+  const handlePrevious = () => {
+    setCursor(cursorStack[cursorStack.length - 1]);
+    setCursorStack((stack) => stack.slice(0, -1));
+  };
+  const handleNext = () => {
+    const nextCursor = reportsPage?.nextCursor;
+    if (!nextCursor || pageLoading) {
+      return;
+    }
+    setCursorStack((stack) => [...stack, cursor]);
+    setCursor(nextCursor);
+  };
 
   const [retryNcmecSubmission] = useGQLRetryNcmecSubmissionMutation();
   const [retryingDecisionId, setRetryingDecisionId] = useState<string | null>(
@@ -235,7 +267,7 @@ export default function NcmecReportsDashboard() {
           variables: { decisionId },
           // Refetching keeps the table consistent: a successful retry should
           // move the row from "Failed" to "Successful" the next render.
-          refetchQueries: ['AllNCMECReports'],
+          refetchQueries: ['AllNCMECReports', 'NcmecReportsPage'],
           awaitRefetchQueries: true,
         });
         if (data?.retryNcmecSubmission.success) {
@@ -312,13 +344,6 @@ export default function NcmecReportsDashboard() {
     }
     return undefined;
   }, [columnsMenuVisible]);
-
-  const fetchReportById = () => {
-    if (!searchId) {
-      return;
-    }
-    getNcmecReportById({ variables: { reportId: searchId } });
-  };
 
   const columns = useMemo(
     () =>
@@ -443,143 +468,128 @@ export default function NcmecReportsDashboard() {
   );
 
   const tableData = useMemo(() => {
-    // Successful reports come from `ncmecReports`; if the user is searching by
-    // a specific report id we substitute the lazy-fetched single report — but
-    // only when that fetched report actually matches the current `searchId`,
-    // otherwise editing the input after a fetch would show stale data.
-    const successfulReportsSource =
-      searchId && ncmecReportData?.ncmecReportById?.reportId === searchId
-        ? [ncmecReportData.ncmecReportById]
-        : (ncmecReports ?? []);
-
-    const successfulRows = successfulReportsSource
-      .filter((report) =>
-        searchId ? report.reportId.includes(searchId) : true,
-      )
-      .map((report) => {
-        const reviewer = users?.find((u) => u.id === report.reviewerId);
-        const reviewerName = reviewer
-          ? `${reviewer.firstName} ${reviewer.lastName}`
-          : 'Other';
-        return {
-          // Sort key: numeric ms since epoch on the underlying timestamp.
-          tsMs: new Date(report.ts).getTime(),
-          row: {
-            // `date` is `YYYY-MM-DD` for the dateRange comparator.
-            values: {
-              date: format(new Date(report.ts), 'yyyy-MM-dd'),
-              reviewer: reviewerName,
-              status: 'Successful' as const,
-              reportId: report.reportId,
-              userId: report.userId,
-              userItemType: report.userItemType.name,
-            },
-            date: <div>{format(new Date(report.ts), 'MM/dd/yy h:mm a')}</div>,
-            reviewer: <div className="whitespace-nowrap">{reviewerName}</div>,
-            status: <Tag color="success">Successful</Tag>,
-            reportId: (
-              <div key={report.reportId} className="flex flex-row">
-                <CopyTextComponent value={report.reportId} />
-                <div className="pl-2">
-                  <BlobDownloadLink
-                    fileName={`ncmec_report_${report.reportId}.xml`}
-                    contents={formatXml(report.reportXml)}
-                    mimeType="text/plain"
-                  >
-                    <Download className="w-4 h-4" />
-                  </BlobDownloadLink>
-                </div>
-              </div>
-            ),
-            userId: <CopyTextComponent value={report.userId} />,
-            userItemType: <div>{report.userItemType.name}</div>,
-            reportedMedia: (
-              <div className="flex flex-col justify-start gap-1 text-start">
-                {report.reportedMedia.length < 2
-                  ? null
-                  : `${report.reportedMedia.length} media files: `}
-                <div className="flex flex-wrap overflow-auto max-h-12">
-                  {report.reportedMedia.map((media) => (
-                    <div key={media.id} className="flex flex-row">
-                      <CopyTextComponent value={`ID: ${media.id}`} />
-                      <div className="pl-2">
-                        <BlobDownloadLink
-                          fileName={`ncmec_report_${report.reportId}_media_${media.id}.xml`}
-                          contents={formatXml(media.xml)}
-                          mimeType="text/plain"
-                        >
-                          <Download className="w-4 h-4" />
-                        </BlobDownloadLink>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ),
-            additionalFiles: (
-              <div className="flex flex-col justify-start max-w-md gap-1 text-start">
-                {report.additionalFiles.length < 2
-                  ? null
-                  : `${report.additionalFiles.length} additional files: `}
-                <div className="flex flex-wrap overflow-auto max-h-12">
-                  {report.additionalFiles.map((additionalFile) => (
-                    <div
-                      key={additionalFile.ncmecFileId}
-                      className="flex flex-row"
-                    >
-                      <div className="pl-2">
-                        <BlobDownloadLink
-                          fileName={`ncmec_report_additional_file_${additionalFile.ncmecFileId}.xml`}
-                          contents={formatXml(additionalFile.xml)}
-                          mimeType="text/plain"
-                        >
-                          <Download className="w-4 h-4 pr-1" />
-                        </BlobDownloadLink>
-                      </div>
-                      <div className="overflow-ellipsis">
-                        {`URL: ${additionalFile.url}`}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ),
-            reportedMessages: (
-              <div className="flex flex-col justify-start gap-1 text-start">
-                {report.reportedMessages.length < 2
-                  ? null
-                  : `${report.reportedMessages.length} reported threads: `}
-                <div className="flex flex-wrap overflow-auto max-h-12">
-                  {report.reportedMessages.map((reportedMessage) => (
-                    <div
-                      key={reportedMessage.fileName}
-                      className="flex flex-row"
-                    >
-                      {`${reportedMessage.fileName}`}
-                      <div className="pl-2">
-                        <BlobDownloadLink
-                          fileName={reportedMessage.fileName}
-                          contents={reportedMessage.csv}
-                          mimeType="text/csv"
-                        >
-                          <Download className="w-4 h-4" />
-                        </BlobDownloadLink>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ),
-            isTest: <div>{report.isTest ? 'True' : 'False'}</div>,
-            lastError: null as ReactNode,
-            action: null as ReactNode,
+    const successfulRows = (ncmecReports ?? []).map((report) => {
+      const reviewer = users?.find((u) => u.id === report.reviewerId);
+      const reviewerName = reviewer
+        ? `${reviewer.firstName} ${reviewer.lastName}`
+        : 'Other';
+      return {
+        // Sort key: numeric ms since epoch on the underlying timestamp.
+        tsMs: new Date(report.ts).getTime(),
+        row: {
+          // `date` is `YYYY-MM-DD` for the dateRange comparator.
+          values: {
+            date: format(new Date(report.ts), 'yyyy-MM-dd'),
+            reviewer: reviewerName,
+            status: 'Successful' as const,
+            reportId: report.reportId,
+            userId: report.userId,
+            userItemType: report.userItemType.name,
           },
-        };
-      });
+          date: <div>{format(new Date(report.ts), 'MM/dd/yy h:mm a')}</div>,
+          reviewer: <div className="whitespace-nowrap">{reviewerName}</div>,
+          status: <Tag color="success">Successful</Tag>,
+          reportId: (
+            <div key={report.reportId} className="flex flex-row">
+              <CopyTextComponent value={report.reportId} />
+              <div className="pl-2">
+                <BlobDownloadLink
+                  fileName={`ncmec_report_${report.reportId}.xml`}
+                  contents={formatXml(report.reportXml)}
+                  mimeType="text/plain"
+                >
+                  <Download className="w-4 h-4" />
+                </BlobDownloadLink>
+              </div>
+            </div>
+          ),
+          userId: <CopyTextComponent value={report.userId} />,
+          userItemType: <div>{report.userItemType.name}</div>,
+          reportedMedia: (
+            <div className="flex flex-col justify-start gap-1 text-start">
+              {report.reportedMedia.length < 2
+                ? null
+                : `${report.reportedMedia.length} media files: `}
+              <div className="flex flex-wrap overflow-auto max-h-12">
+                {report.reportedMedia.map((media) => (
+                  <div key={media.id} className="flex flex-row">
+                    <CopyTextComponent value={`ID: ${media.id}`} />
+                    <div className="pl-2">
+                      <BlobDownloadLink
+                        fileName={`ncmec_report_${report.reportId}_media_${media.id}.xml`}
+                        contents={formatXml(media.xml)}
+                        mimeType="text/plain"
+                      >
+                        <Download className="w-4 h-4" />
+                      </BlobDownloadLink>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ),
+          additionalFiles: (
+            <div className="flex flex-col justify-start max-w-md gap-1 text-start">
+              {report.additionalFiles.length < 2
+                ? null
+                : `${report.additionalFiles.length} additional files: `}
+              <div className="flex flex-wrap overflow-auto max-h-12">
+                {report.additionalFiles.map((additionalFile) => (
+                  <div
+                    key={additionalFile.ncmecFileId}
+                    className="flex flex-row"
+                  >
+                    <div className="pl-2">
+                      <BlobDownloadLink
+                        fileName={`ncmec_report_additional_file_${additionalFile.ncmecFileId}.xml`}
+                        contents={formatXml(additionalFile.xml)}
+                        mimeType="text/plain"
+                      >
+                        <Download className="w-4 h-4 pr-1" />
+                      </BlobDownloadLink>
+                    </div>
+                    <div className="overflow-ellipsis">
+                      {`URL: ${additionalFile.url}`}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ),
+          reportedMessages: (
+            <div className="flex flex-col justify-start gap-1 text-start">
+              {report.reportedMessages.length < 2
+                ? null
+                : `${report.reportedMessages.length} reported threads: `}
+              <div className="flex flex-wrap overflow-auto max-h-12">
+                {report.reportedMessages.map((reportedMessage) => (
+                  <div key={reportedMessage.fileName} className="flex flex-row">
+                    {`${reportedMessage.fileName}`}
+                    <div className="pl-2">
+                      <BlobDownloadLink
+                        fileName={reportedMessage.fileName}
+                        contents={reportedMessage.csv}
+                        mimeType="text/csv"
+                      >
+                        <Download className="w-4 h-4" />
+                      </BlobDownloadLink>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ),
+          isTest: <div>{report.isTest ? 'True' : 'False'}</div>,
+          lastError: null as ReactNode,
+          action: null as ReactNode,
+        },
+      };
+    });
 
-    // Failed rows: only included when the user isn't searching by report id
-    // (failed submissions don't have a CyberTip report id to match against).
-    const failedRows = searchId
+    // Failed submissions are not paged; they appear on the first page only,
+    // and not in search results (they have no CyberTip report ID).
+    const hideFailedRows = search !== '' || !isFirstPage;
+    const failedRows = hideFailedRows
       ? []
       : (failedNcmecSubmissions ?? []).map((failed) => {
           const reviewer = users?.find((u) => u.id === failed.reviewerId);
@@ -644,15 +654,15 @@ export default function NcmecReportsDashboard() {
   }, [
     failedNcmecSubmissions,
     handleRetry,
-    ncmecReportData,
+    isFirstPage,
     ncmecReports,
     retryingDecisionId,
-    searchId,
+    search,
     users,
   ]);
 
-  if (allReportsError || ncmecReportError) {
-    throw allReportsError ?? ncmecReportError!;
+  if (allReportsError || pageError) {
+    throw allReportsError ?? pageError!;
   }
 
   if (permissionsLoading) {
@@ -679,9 +689,11 @@ export default function NcmecReportsDashboard() {
         title="NCMEC Reports"
         subtitle="View all NCMEC reports submitted by your organization."
       />
-      {allReportsLoading || ncmecReportLoading ? (
+      {allReportsLoading || reportsPage === undefined ? (
         <FullScreenLoading />
-      ) : (ncmecReports?.length ?? 0) === 0 &&
+      ) : !search &&
+        isFirstPage &&
+        (ncmecReports?.length ?? 0) === 0 &&
         (failedNcmecSubmissions?.length ?? 0) === 0 ? (
         <div className="flex items-center justify-center w-full h-full">
           <div className="flex flex-col items-center justify-center p-12 mt-24">
@@ -717,10 +729,14 @@ export default function NcmecReportsDashboard() {
                 key="topleft"
               >
                 <div className="flex flex-col items-start">
-                  <div className="mb-2 font-semibold">Search By Report ID</div>
-                  <Input
+                  <div className="mb-2 font-semibold">
+                    Search by report or user ID
+                  </div>
+                  <Input.Search
+                    aria-label="Search by report or user ID"
                     className="rounded-lg w-[300px]"
-                    onChange={(event) => setSearchId(event.target.value)}
+                    defaultValue={search}
+                    onSearch={handleSearch}
                     autoFocus
                     allowClear
                   />
@@ -769,14 +785,32 @@ export default function NcmecReportsDashboard() {
               </div>
             }
           />
-          {searchId && tableData?.length === 0 ? (
-            <div className="flex items-center self-center justify-center h-full p-8 mt-8 text-base text-center rounded shadow w-fit bg-slate-100 text-slate-600">
-              Don't see the report?{' '}
-              <Button type="link" onClick={fetchReportById}>
-                Click here to search further back
-              </Button>
+          {search && tableData.length === 0 ? (
+            <div className="self-center p-8 mt-8 text-base text-slate-600">
+              No reports match "{search}".
             </div>
           ) : null}
+          <div className="flex items-center justify-between w-full mt-4 mb-10">
+            <button
+              type="button"
+              aria-label="Previous page"
+              disabled={isFirstPage || pageLoading}
+              onClick={handlePrevious}
+              className="bg-transparent border-none cursor-pointer disabled:cursor-default disabled:opacity-40"
+            >
+              <ChevronLeft className="font-bold w-7 text-slate-500" />
+            </button>
+            <span>Page {cursorStack.length + 1}</span>
+            <button
+              type="button"
+              aria-label="Next page"
+              disabled={!reportsPage.nextCursor || pageLoading}
+              onClick={handleNext}
+              className="bg-transparent border-none cursor-pointer disabled:cursor-default disabled:opacity-40"
+            >
+              <ChevronRight className="font-bold w-7 text-slate-500" />
+            </button>
+          </div>
         </div>
       )}
     </>

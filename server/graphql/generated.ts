@@ -3446,6 +3446,22 @@ export type GQLNcmecReportedMediaDetails = {
   readonly url: Scalars['String']['output'];
 };
 
+export type GQLNcmecReportsPage = {
+  readonly __typename?: 'NcmecReportsPage';
+  /** Absent on the last page. */
+  readonly nextCursor?: Maybe<Scalars['Cursor']['output']>;
+  readonly reports: ReadonlyArray<GQLNcmecReport>;
+};
+
+export type GQLNcmecReportsPageInput = {
+  /** Opaque cursor from a previous page. Absent for the newest page. */
+  readonly cursor?: InputMaybe<Scalars['Cursor']['input']>;
+  /** Reports per page. Defaults to 50, capped at 100. */
+  readonly limit?: InputMaybe<Scalars['Int']['input']>;
+  /** Matches part of a report ID or user ID. */
+  readonly search?: InputMaybe<Scalars['String']['input']>;
+};
+
 export type GQLNcmecThreadInput = {
   readonly reportedContent: ReadonlyArray<GQLNcmecContentInThreadReport>;
   readonly threadId: Scalars['ID']['input'];
@@ -3541,7 +3557,10 @@ export type GQLOrg = {
    * report when ncmecMediaReviewRequirement is MINIMUM. Defaults to 1.
    */
   readonly ncmecMinMediaToReview: Scalars['Int']['output'];
+  /** @deprecated Returns only the newest 300 reports. Use ncmecReportsPage. */
   readonly ncmecReports: ReadonlyArray<GQLNcmecReport>;
+  /** One page of the org's filed NCMEC reports, newest first. */
+  readonly ncmecReportsPage: GQLNcmecReportsPage;
   readonly onCallAlertEmail?: Maybe<Scalars['String']['output']>;
   readonly partialItemsEndpoint?: Maybe<Scalars['String']['output']>;
   readonly partialItemsRequestHeaders?: Maybe<Scalars['JSONObject']['output']>;
@@ -3564,6 +3583,10 @@ export type GQLOrg = {
   readonly users: ReadonlyArray<GQLUser>;
   readonly usersWhoCanReviewEveryQueue: ReadonlyArray<GQLUser>;
   readonly websiteUrl: Scalars['String']['output'];
+};
+
+export type GQLOrgNcmecReportsPageArgs = {
+  input?: InputMaybe<GQLNcmecReportsPageInput>;
 };
 
 export type GQLOrgSignalsArgs = {
@@ -6638,6 +6661,12 @@ export type GQLResolversTypes = {
   NcmecOrgSettings: ResolverTypeWrapper<GQLNcmecOrgSettings>;
   NcmecOrgSettingsInput: GQLNcmecOrgSettingsInput;
   NcmecReportedMediaDetails: ResolverTypeWrapper<GQLNcmecReportedMediaDetails>;
+  NcmecReportsPage: ResolverTypeWrapper<
+    Omit<GQLNcmecReportsPage, 'reports'> & {
+      reports: ReadonlyArray<GQLResolversTypes['NCMECReport']>;
+    }
+  >;
+  NcmecReportsPageInput: GQLNcmecReportsPageInput;
   NcmecThreadInput: GQLNcmecThreadInput;
   NoJobWithIdInQueueError: ResolverTypeWrapper<GQLNoJobWithIdInQueueError>;
   NonEmptyString: ResolverTypeWrapper<NonEmptyString>;
@@ -7377,6 +7406,10 @@ export type GQLResolversParentTypes = {
   NcmecOrgSettings: GQLNcmecOrgSettings;
   NcmecOrgSettingsInput: GQLNcmecOrgSettingsInput;
   NcmecReportedMediaDetails: GQLNcmecReportedMediaDetails;
+  NcmecReportsPage: Omit<GQLNcmecReportsPage, 'reports'> & {
+    reports: ReadonlyArray<GQLResolversParentTypes['NCMECReport']>;
+  };
+  NcmecReportsPageInput: GQLNcmecReportsPageInput;
   NcmecThreadInput: GQLNcmecThreadInput;
   NoJobWithIdInQueueError: GQLNoJobWithIdInQueueError;
   NonEmptyString: NonEmptyString;
@@ -12538,6 +12571,23 @@ export type GQLNcmecReportedMediaDetailsResolvers<
   url?: Resolver<GQLResolversTypes['String'], ParentType, ContextType>;
 };
 
+export type GQLNcmecReportsPageResolvers<
+  ContextType = Context,
+  ParentType extends GQLResolversParentTypes['NcmecReportsPage'] =
+    GQLResolversParentTypes['NcmecReportsPage'],
+> = {
+  nextCursor?: Resolver<
+    Maybe<GQLResolversTypes['Cursor']>,
+    ParentType,
+    ContextType
+  >;
+  reports?: Resolver<
+    ReadonlyArray<GQLResolversTypes['NCMECReport']>,
+    ParentType,
+    ContextType
+  >;
+};
+
 export type GQLNoJobWithIdInQueueErrorResolvers<
   ContextType = Context,
   ParentType extends GQLResolversParentTypes['NoJobWithIdInQueueError'] =
@@ -12747,6 +12797,12 @@ export type GQLOrgResolvers<
     ReadonlyArray<GQLResolversTypes['NCMECReport']>,
     ParentType,
     ContextType
+  >;
+  ncmecReportsPage?: Resolver<
+    GQLResolversTypes['NcmecReportsPage'],
+    ParentType,
+    ContextType,
+    Partial<GQLOrgNcmecReportsPageArgs>
   >;
   onCallAlertEmail?: Resolver<
     Maybe<GQLResolversTypes['String']>,
@@ -16129,6 +16185,7 @@ export type GQLResolvers<ContextType = Context> = {
   NcmecManualReviewJobPayload?: GQLNcmecManualReviewJobPayloadResolvers<ContextType>;
   NcmecOrgSettings?: GQLNcmecOrgSettingsResolvers<ContextType>;
   NcmecReportedMediaDetails?: GQLNcmecReportedMediaDetailsResolvers<ContextType>;
+  NcmecReportsPage?: GQLNcmecReportsPageResolvers<ContextType>;
   NoJobWithIdInQueueError?: GQLNoJobWithIdInQueueErrorResolvers<ContextType>;
   NonEmptyString?: GraphQLScalarType;
   NotFoundError?: GQLNotFoundErrorResolvers<ContextType>;

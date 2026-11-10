@@ -86,6 +86,12 @@ export class NcmecService {
     return this.ncmecReporting.getNcmecReports(opts);
   }
 
+  async getNcmecReportsPage(
+    opts: Parameters<NcmecReporting['getNcmecReportsPage']>[0],
+  ) {
+    return this.ncmecReporting.getNcmecReportsPage(opts);
+  }
+
   async getUsersWithNcmecDecision(opts: { startDate: Date }) {
     return this.ncmecReporting.getUsersWithNcmecDecision(opts);
   }

@@ -68,6 +68,11 @@ const typeDefs = /* GraphQL */ `
     ncmecMinMediaToReview: Int!
     hasAppealsEnabled: Boolean!
     ncmecReports: [NCMECReport!]!
+      @deprecated(
+        reason: "Returns only the newest 300 reports. Use ncmecReportsPage."
+      )
+    "One page of the org's filed NCMEC reports, newest first."
+    ncmecReportsPage(input: NcmecReportsPageInput): NcmecReportsPage!
     """
     NCMEC decisions that did not produce a successful CyberTip report. Returned
     alongside ncmecReports on the dashboard so reviewers can see the full
@@ -307,6 +312,61 @@ async function validateUserStrikeThresholdActionParameters(
       actionParameters: validated,
     };
   });
+}
+
+const DEFAULT_NCMEC_REPORTS_PAGE_SIZE = 50;
+const MAX_NCMEC_REPORTS_PAGE_SIZE = 100;
+
+const isReadonlyArray = (value: unknown): value is readonly unknown[] =>
+  Array.isArray(value);
+
+/** A page cursor is the last report of the previous page. */
+function parseNcmecReportsCursor(
+  cursor: JsonValue | null | undefined,
+): string | undefined {
+  if (cursor == null) {
+    return undefined;
+  }
+  const reportId =
+    typeof cursor === 'object' && !isReadonlyArray(cursor)
+      ? cursor.reportId
+      : undefined;
+  if (typeof reportId !== 'string') {
+    throw userInputError('Invalid NCMEC reports cursor.');
+  }
+  return reportId;
+}
+
+async function withUserItemTypes<
+  T extends {
+    userItemTypeId: string;
+    additionalFiles: unknown[] | null;
+    reportedMessages: unknown[] | null;
+  },
+>(context: Context, orgId: string, reports: readonly T[]) {
+  return Promise.all(
+    reports.map(async (report) => {
+      const itemType =
+        await context.services.ModerationConfigService.getItemType({
+          orgId,
+          itemTypeSelector: { id: report.userItemTypeId },
+        });
+
+      // The only way the item type would not exist is if the item type had been
+      // deleted between the time the report was enqueued and the time the
+      // report is viewed in the NCMEC view.
+      if (!itemType || itemType.kind !== 'USER') {
+        throw Error('NCMEC user item type is not of kind USER');
+      }
+
+      return {
+        ...report,
+        additionalFiles: report.additionalFiles ?? [],
+        userItemType: itemType,
+        reportedMessages: report.reportedMessages ?? [],
+      };
+    }),
+  );
 }
 
 const Org: GQLOrgResolvers = {
@@ -557,29 +617,31 @@ const Org: GQLOrgResolvers = {
       orgId: user.orgId,
       reviewerId: user.id,
     });
-    return Promise.all(
-      reports.map(async (report) => {
-        const itemType =
-          await context.services.ModerationConfigService.getItemType({
-            orgId: user.orgId,
-            itemTypeSelector: { id: report.userItemTypeId },
-          });
-
-        // The only way the item type would not exist is if the item type had been
-        // deleted between the time the report was enqueued and the time the
-        // report is viewed in the NCMEC view.
-        if (!itemType || itemType.kind !== 'USER') {
-          throw Error('NCMEC user item type is not of kind USER');
-        }
-
-        return {
-          ...report,
-          additionalFiles: report.additionalFiles ?? [],
-          userItemType: itemType,
-          reportedMessages: report.reportedMessages ?? [],
-        };
-      }),
-    );
+    return withUserItemTypes(context, user.orgId, reports);
+  },
+  async ncmecReportsPage(org, { input }, context) {
+    const user = context.getUser();
+    if (!user || user.orgId !== org.id) {
+      throw unauthenticatedError('User required.');
+    }
+    requireChildSafetyPermission(user);
+    const page = await context.services.NcmecService.getNcmecReportsPage({
+      orgId: user.orgId,
+      reviewerId: user.id,
+      afterReportId: parseNcmecReportsCursor(input?.cursor),
+      search: input?.search?.trim(),
+      limit: Math.min(
+        Math.max(input?.limit ?? DEFAULT_NCMEC_REPORTS_PAGE_SIZE, 1),
+        MAX_NCMEC_REPORTS_PAGE_SIZE,
+      ),
+    });
+    return {
+      reports: await withUserItemTypes(context, user.orgId, page.reports),
+      nextCursor:
+        page.nextAfterReportId === null
+          ? null
+          : { reportId: page.nextAfterReportId },
+    };
   },
   async failedNcmecSubmissions(org, _, context) {
     const user = context.getUser();
